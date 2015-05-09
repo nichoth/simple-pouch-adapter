@@ -1,81 +1,93 @@
-var  _ = require('underscore');
-
-/**
- * Adapter.js
- * to-do:
- *   return promises for everything.
- */
-function Adapter(db) {
-  this._db = db;
+function Adapter(pouch) {
+  if (!(this instanceof Adapter)) return new Adapter(pouch);
+  this._db = pouch;
 }
 
-_(Adapter.prototype).extend({
+// return promise for all records of given type
+Adapter.prototype.findAll = function(type) {
 
-  /**
-   * Find all records of given type.
-   */
-  findAll: function(type) {
+  var map = function(doc, emit) {
+    if (doc.type === type) {
+      emit(doc.name, null);
+    }
+  };
 
-    var map = function(doc, emit) {
-      if (doc.type === type) {
-        emit(doc.name, null);
-      }
+  var options = {
+    include_docs: true,
+    reduce: false,
+  };
+
+  var promise = this._db.query({map:map}, options);
+
+  promise.then(function(resp) {
+    return resp;
+  }).catch(function(err) {
+    console.log(err);
+    return err;
+  });
+  return promise;
+
+};
+
+Adapter.prototype.find = function(type, ids) {
+
+};
+
+Adapter.prototype.saveNode = function() {
+
+};
+
+/**
+ * create node and metadata
+ *
+ * nodeData is hash of embedded attributes on node doc, no id or type.
+ *
+ * metadata is an array with objects like:
+ * [ {field: 'something', value: 'something'} ]
+ */
+Adapter.prototype.createNode = function(nodeData, metadata) {
+
+  var values = metadata.map(function(pair) {
+    return {
+      name: pair.value,
+      _id: 'value'+pair.value,
+      type: 'value',
+      belongsTo: 'field'+pair.field,
     };
+  });
 
-    var options = {
-      include_docs: true,
-      reduce: false,
+  var fields = metadata.map(function(pair) {
+    return {
+      name: pair.field,
+      _id: 'field' + pair.field,
+      type: 'field',
     };
+  });
 
-    var promise = this._db.query({map:map}, options);
+  nodeData._id = 'node'+nodeData.name;
+  nodeData.tyoe = 'node';
+  nodeData.metadata = metadata.map(function(pair) {
+    return {
+      field: createId('field', pair.field),
+      value: createId('value', pair.value)
+    };
+  });
 
-    promise.then(function(resp) {
-      return resp;
-    }).catch(function(err) {
+  var opts = {
+    include_docs: true
+  };
+
+  return this._db.bulkDocs(values.concat(fields, nodeData), opts)
+    .then(function(resp) {
+      console.log(resp);
+    })
+    .catch(function(err) {
       console.log(err);
-      return err;
     });
-    return promise;
+};
 
-    // var data;
-    // if (type == 'field') {
-    //   data = [
-    //     { type: 'field', _id: 'mythology', values: ['11','12'], name: 'mythology'},
-    //     { type: 'field', _id: 'sex', values: ['13','14'], name: 'sex'},
-    //     { type: 'field', _id: 'hobbies', values: ['15','16','17','18','19'], name: 'hobbies'},
-    //     { type: 'field', _id: 'subject', values: ['191', '192'], name: 'subject'},
-    //   ];
-    // } else if(type == 'value') {
-    //   data = [
-    //     { type: 'value', _id: '11', root: true, name: 'greek', },
-    //     { type: 'value', _id: '12', root: true, name: 'norse', },
-    //     { type: 'value', _id: '13', root: true, name: 'f', },
-    //     { type: 'value', _id: '14', root: true, name: 'm', },
-    //     { type: 'value', _id: '15', root: true, name: 'riddles', },
-    //     { type: 'value', _id: '16', root: true, name: 'coiling', },
-    //     { type: 'value', _id: '17', root: true, name: 'luring', },
-    //     { type: 'value', _id: '18', root: true, name: 'staring', },
-    //     { type: 'value', _id: '19', root: true, name: 'growing', },
-    //     { type: 'value', _id: '191', root: true, name: 'scary things', children: ['192'] },
-    //     { type: 'value', _id: '192', root: false, name: 'monsters', },
-    //   ];
-    // } else if(type == 'node') {
-    //   data = [
-    //     { type: 'node', _id: '1', name: "sphinx", 'mythology': '11', 'sex': '13', 'hobbies': '15' },
-    //     { type: 'node', _id: '2', name: "hydra", 'mythology': '11', 'sex': '14', 'hobbies': '16' },
-    //     { type: 'node', _id: '3', name: "huldra", 'mythology': '12', 'sex': '13', 'hobbies': '17' },
-    //     { type: 'node', _id: '4', name: "cyclops", 'mythology': '11', 'sex': '14', 'hobbies': '18' },
-    //     { type: 'node', _id: '5', name: "fenrir", 'mythology': '12', 'sex': '14', 'hobbies': '19' },
-    //     { type: 'node', _id: '6', name: "medusa",  'mythology': '11', 'sex': '13', 'hobbies': '16' },
-    //   ];
-    // }
-    // return data;
-  },
-
-  find: function(type, ids) {
-
-  },
-
-});
+function createId(type, name) {
+  return type+name;
+}
 
 module.exports = Adapter;
